@@ -18,6 +18,10 @@ logs/
 *.log
 npm-debug.log*
 
+# Process ID files
+.backend.pid
+.frontend.pid
+
 # OS files
 .DS_Store
 Thumbs.db

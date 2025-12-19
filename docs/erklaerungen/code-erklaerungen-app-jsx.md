@@ -1,103 +1,160 @@
 # Code-Erklärungen: App.jsx
 
-Diese Datei enthält eine detaillierte Erklärung jeder Zeile des Frontend-React-Codes (`frontend/src/App.jsx`).
+Diese Datei enthält eine detaillierte Erklärung des Frontend-React-Codes (`frontend/src/App.jsx`).
 
-## Zeile 1: React-Hooks importieren
+**Hinweis:** Diese App implementiert **mehrere Chat-Sitzungen** und **Streaming-Antworten**.
 
-```javascript
-import { useState, useEffect, useRef } from "react";
-```
+## Hauptfunktionen der App
 
-**Erklärung:** Importiert drei wichtige React-Hooks:
+Die App.jsx implementiert:
 
-- `useState`: Verwaltet den Zustand (State) in funktionalen Komponenten
-- `useEffect`: Führt Seiteneffekte aus (z.B. API-Aufrufe, Subscriptions)
-- `useRef`: Erstellt eine Referenz zu DOM-Elementen oder persistenten Werten
+1. **Session-Management**: Mehrere Chat-Sitzungen mit Sidebar
+2. **Streaming-Antworten**: Echtzeit-Anzeige mit Typing-Effekt
+3. **Nachrichtenverwaltung**: Session-basierte Nachrichtenpersistenz
+4. **UI-Interaktionen**: Erstellen, Wechseln und Löschen von Sessions
 
----
+## State-Variablen
 
-## Zeile 2: CSS importieren
-
-```javascript
-import "./App.css";
-```
-
-**Erklärung:** Importiert die CSS-Datei für das Styling der App-Komponente. Vite verarbeitet diesen Import automatisch.
-
----
-
-## Zeile 4: App-Komponente definieren
+### Session-bezogene States
 
 ```javascript
-function App() {
+const [sessions, setSessions] = useState([]);
+const [currentSessionId, setCurrentSessionId] = useState(null);
 ```
 
-**Erklärung:** Definiert die Haupt-App-Komponente als funktionale Komponente. Diese ist die Root-Komponente der gesamten Anwendung.
+**Erklärung:**
 
----
+- `sessions`: Array aller Chat-Sitzungen
+- `currentSessionId`: ID der aktuell aktiven Sitzung
+- Ermöglicht das Verwalten mehrerer unabhängiger Gespräche
 
-## Zeile 5-9: State-Variablen initialisieren
-
-### Zeile 5: Messages State
+### Nachrichten-States
 
 ```javascript
 const [messages, setMessages] = useState([]);
+const [streamingMessage, setStreamingMessage] = useState("");
 ```
 
-**Erklärung:** Erstellt einen State für die Nachrichten:
+**Erklärung:**
 
-- `messages`: Array aller Chat-Nachrichten (user + assistant)
-- `setMessages`: Funktion zum Aktualisieren der Nachrichten
-- `[]`: Initialer Wert ist ein leeres Array
+- `messages`: Array aller Nachrichten der aktuellen Sitzung
+- `streamingMessage`: Akkumuliert die streamende AI-Antwort während sie empfangen wird
+- Ermöglicht Echtzeit-Darstellung mit Typing-Effekt
 
-### Zeile 6: Input Message State
+### UI-States
 
 ```javascript
 const [inputMessage, setInputMessage] = useState("");
-```
-
-**Erklärung:** State für den aktuellen Text im Eingabefeld:
-
-- `inputMessage`: Der aktuelle Text
-- `setInputMessage`: Funktion zum Aktualisieren
-- `""`: Initialer Wert ist ein leerer String
-
-### Zeile 7: Loading State
-
-```javascript
 const [isLoading, setIsLoading] = useState(false);
-```
-
-**Erklärung:** State für den Lade-Zustand:
-
-- `isLoading`: `true`, wenn auf API-Antwort gewartet wird
-- `false`: Initial nicht am Laden
-
-### Zeile 8: Error State
-
-```javascript
 const [error, setError] = useState("");
 ```
 
-**Erklärung:** State für Fehlermeldungen:
+**Erklärung:**
 
-- `error`: Enthält die Fehlermeldung als String
-- `""`: Initial keine Fehlermeldung
+- `inputMessage`: Aktueller Text im Eingabefeld
+- `isLoading`: true während auf API-Antwort gewartet wird
+- `error`: Fehlermeldung falls etwas schiefgeht
 
-### Zeile 9: Chat Container Reference
+### Referenzen
 
 ```javascript
 const chatContainerRef = useRef(null);
 ```
 
-**Erklärung:** Erstellt eine Referenz zum Chat-Container-DOM-Element:
+**Erklärung:** Referenz zum Chat-Container für automatisches Scrollen
 
-- Wird verwendet, um das automatische Scrollen zu implementieren
-- `null`: Initial noch keine Referenz
+## Wichtige Funktionen
 
----
+### fetchSessions()
 
-## Zeile 11-14: Gesprächsverlauf beim Start laden
+Lädt alle Chat-Sitzungen vom Backend und wählt automatisch eine Sitzung aus oder erstellt eine neue.
+
+### createNewSession()
+
+Erstellt eine neue Chat-Sitzung über `POST /api/sessions` und fügt sie zur Sitzungsliste hinzu.
+
+### deleteSession(sessionId)
+
+Löscht eine Sitzung über `DELETE /api/sessions/:sessionId`. Wechselt zur nächsten Sitzung oder erstellt eine neue.
+
+### fetchMessages(sessionId)
+
+Lädt alle Nachrichten für eine bestimmte Sitzung über `GET /api/messages?sessionId=...`
+
+### sendMessage(e)
+
+Sendet eine Nachricht an ChatGPT mit Streaming-Unterstützung:
+
+1. Validiert Input und Session
+2. Fügt User-Nachricht sofort zur UI hinzu
+3. Sendet POST-Request an `/api/chat` mit sessionId
+4. Empfängt Server-Sent Events (SSE) Stream
+5. Aktualisiert `streamingMessage` in Echtzeit
+6. Fügt vollständige Assistant-Antwort zu messages hinzu
+
+## Streaming-Implementierung
+
+Die App verwendet die ReadableStream API um Server-Sent Events zu verarbeiten:
+
+```javascript
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+```
+
+Jedes Chunk wird dekodiert und die Antwort wird Wort-für-Wort angezeigt, was einen natürlichen Typing-Effekt erzeugt.
+
+## useEffect Hooks
+
+### Sessions beim Start laden
+
+```javascript
+useEffect(() => {
+  fetchSessions();
+}, []);
+```
+
+Lädt alle Sitzungen wenn die Komponente zum ersten Mal gemountet wird.
+
+### Nachrichten beim Session-Wechsel laden
+
+```javascript
+useEffect(() => {
+  if (currentSessionId) {
+    fetchMessages(currentSessionId);
+  }
+}, [currentSessionId]);
+```
+
+Lädt Nachrichten neu wenn zu einer anderen Sitzung gewechselt wird.
+
+### Auto-Scroll
+
+```javascript
+useEffect(() => {
+  if (chatContainerRef.current) {
+    chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+  }
+}, [messages, isLoading, streamingMessage]);
+```
+
+Scrollt automatisch nach unten wenn neue Nachrichten oder Streaming-Content erscheint.
+
+## UI-Struktur
+
+Die App rendert:
+
+1. **Sidebar**: Sitzungsliste mit "+ New Chat" Button
+2. **Chat-Bereich**: Nachrichtenliste mit User/Assistant-Nachrichten
+3. **Streaming-Anzeige**: Zeigt teilweise Antworten während sie empfangen werden
+4. **Eingabebereich**: Textfeld und Send-Button
+5. **Fehleranzeige**: Zeigt Fehlermeldungen an
+
+## Session-Management UI
+
+- Klick auf Session in Sidebar → wechselt zu dieser Session
+- "+ New Chat" Button → erstellt neue Session
+- 🗑️ Button → löscht Session
+- Aktive Session wird hervorgehoben
 
 ```javascript
 // Fetch conversation history on component mount

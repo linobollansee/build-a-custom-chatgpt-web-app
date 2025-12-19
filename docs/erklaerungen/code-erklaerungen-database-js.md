@@ -1,103 +1,177 @@
 # Code-Erklärungen: database.js
 
-Diese Datei enthält eine detaillierte Erklärung jeder Zeile des Datenbank-Moduls (`backend/database.js`).
+Diese Datei enthält eine detaillierte Erklärung des Datenbank-Moduls (`backend/database.js`).
 
-## Zeile 1: better-sqlite3 importieren
+**Hinweis:** Die Datenbank implementiert **zwei Tabellen**: `sessions` und `messages` für Multi-Session-Unterstützung.
+
+## Datenbank-Initialisierung
+
+### better-sqlite3 und path importieren
 
 ```javascript
 const Database = require("better-sqlite3");
-```
-
-**Erklärung:** Importiert die `better-sqlite3`-Bibliothek. Dies ist eine schnelle und synchrone SQLite3-Implementierung für Node.js. SQLite ist eine eingebettete Datenbank, die ohne separaten Datenbankserver funktioniert – alle Daten werden in einer einzigen Datei gespeichert.
-
-**Vorteile von better-sqlite3:**
-
-- Synchrone API (einfacher zu verwenden als asynchrone sqlite3)
-- Schneller als andere SQLite-Bibliotheken
-- Keine Callbacks erforderlich
-- Perfekt für kleine bis mittlere Anwendungen
-
----
-
-## Zeile 2: path-Modul importieren
-
-```javascript
 const path = require("path");
 ```
 
-**Erklärung:** Importiert das eingebaute Node.js `path`-Modul. Dieses Modul bietet Hilfsfunktionen für die Arbeit mit Dateipfaden und ist plattformunabhängig (funktioniert unter Windows, Mac, Linux).
+**Erklärung:**
 
----
+- `better-sqlite3`: Schnelle, synchrone SQLite3-Implementierung für Node.js
+- `path`: Node.js-Modul für plattformunabhängige Dateipfade
 
-## Zeile 4-5: Datenbank initialisieren
+### Datenbank-Verbindung erstellen
 
 ```javascript
-// Initialize database
 const db = new Database(path.join(__dirname, "chat.db"));
 ```
 
-**Erklärung:** Erstellt eine neue Datenbankinstanz oder öffnet eine vorhandene:
+**Erklärung:**
 
-- `new Database(...)`: Erstellt/öffnet die Datenbankverbindung
-- `path.join(__dirname, "chat.db")`: Erstellt den vollständigen Dateipfad
-  - `__dirname`: Das aktuelle Verzeichnis der Datei (backend/)
-  - `"chat.db"`: Name der Datenbankdatei
-  - `path.join()`: Kombiniert Pfadteile plattformunabhängig
-- Die Datenbank wird automatisch erstellt, wenn sie noch nicht existiert
-- `db`: Diese Variable wird für alle Datenbankoperationen verwendet
+- Erstellt/öffnet die Datenbankdatei `chat.db` im backend-Verzeichnis
+- Die Datenbank wird automatisch erstellt wenn sie nicht existiert
 
-**Beispiel-Pfad:** `C:\Users\N\Documents\Projects\build-a-custom-chatgpt-web-app\backend\chat.db`
+## Datenbank-Schema
 
----
-
-## Zeile 7-15: Tabelle erstellen
-
-### Zeile 8: SQL-Befehl ausführen
+### Sessions-Tabelle
 
 ```javascript
 db.exec(`
+  CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
+`);
 ```
 
-**Erklärung:** Die `exec()`-Methode führt SQL-Befehle aus. Sie wird hier verwendet, um das Datenbankschema zu erstellen. Template-Strings (mit Backticks `` ` ``) erlauben mehrzeilige SQL-Befehle.
+**Erklärung:**
 
-### Zeile 9: CREATE TABLE Statement
+- `id`: Eindeutige Session-ID (z.B. "session_1234567890_abc123")
+- `title`: Titel der Chat-Sitzung (z.B. "New Chat")
+- `created_at`: Erstellungszeitpunkt
+- `updated_at`: Zeitpunkt der letzten Aktivität
+- Ermöglicht mehrere unabhängige Chat-Sitzungen
+
+### Messages-Tabelle
 
 ```javascript
+db.exec(`
   CREATE TABLE IF NOT EXISTS messages (
-```
-
-**Erklärung:** SQL-Befehl zum Erstellen einer Tabelle:
-
-- `CREATE TABLE`: SQL-Befehl zum Erstellen einer neuen Tabelle
-- `IF NOT EXISTS`: Erstellt nur, wenn die Tabelle noch nicht existiert
-  - Verhindert Fehler beim Neustart des Servers
-  - Macht den Code idempotent (mehrfach ausführbar ohne Fehler)
-- `messages`: Name der Tabelle
-
-### Zeile 10: id-Spalte
-
-```javascript
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+  )
+`);
 ```
 
-**Erklärung:** Definiert die erste Spalte:
+**Erklärung:**
 
-- `id`: Spaltenname
-- `INTEGER`: Datentyp (Ganzzahl)
-- `PRIMARY KEY`: Primärschlüssel (eindeutiger Identifikator für jede Zeile)
-- `AUTOINCREMENT`: Automatische Erhöhung
-  - SQLite vergibt automatisch die nächste verfügbare Nummer
-  - Beginnt bei 1 und erhöht sich mit jeder neuen Zeile
+- `id`: Auto-inkrementierende Nachrichten-ID
+- `session_id`: Verknüpfung zur Sessions-Tabelle (FOREIGN KEY)
+- `role`: "user" oder "assistant"
+- `content`: Nachrichtentext
+- `timestamp`: Zeitpunkt der Nachricht
+- `ON DELETE CASCADE`: Löscht automatisch alle Nachrichten wenn Session gelöscht wird
 
-**Beispiel:** Erste Nachricht bekommt id=1, zweite id=2, usw.
+## Session-Management-Funktionen
 
-### Zeile 11: role-Spalte
+### createSession(title)
+
+Erstellt eine neue Chat-Sitzung mit eindeutiger ID und gegebenem Titel.
 
 ```javascript
-    role TEXT NOT NULL,
+function createSession(title = "New Chat") {
+  const id = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const stmt = db.prepare("INSERT INTO sessions (id, title) VALUES (?, ?)");
+  stmt.run(id, title);
+  return { id, title, created_at: new Date().toISOString() };
+}
 ```
 
-**Erklärung:** Definiert die Spalte für die Rolle:
+### getAllSessions()
+
+Gibt alle Sessions sortiert nach `updated_at` zurück (neueste zuerst).
+
+### getSession(sessionId)
+
+Gibt eine bestimmte Session anhand ihrer ID zurück.
+
+### updateSessionTimestamp(sessionId)
+
+Aktualisiert `updated_at` wenn eine neue Nachricht zur Session hinzugefügt wird.
+
+### deleteSession(sessionId)
+
+Löscht eine Session und automatisch alle zugehörigen Nachrichten (CASCADE).
+
+## Nachrichten-Funktionen
+
+### saveMessage(sessionId, role, content)
+
+Speichert eine Nachricht in der Datenbank und aktualisiert den Session-Timestamp.
+
+**Parameter:**
+
+- `sessionId`: ID der Chat-Sitzung
+- `role`: "user" oder "assistant"
+- `content`: Nachrichteninhalt
+
+### getSessionMessages(sessionId)
+
+Gibt alle Nachrichten einer bestimmten Session sortiert nach Timestamp zurück.
+
+### getAllMessages()
+
+Gibt alle Nachrichten über alle Sessions hinweg zurück (für Rückwärtskompatibilität).
+
+### clearMessages()
+
+Löscht alle Nachrichten aus der Datenbank (nützlich für Tests).
+
+## Exported Functions
+
+Das Modul exportiert:
+
+```javascript
+module.exports = {
+  db,
+  createSession,
+  getAllSessions,
+  getSession,
+  updateSessionTimestamp,
+  deleteSession,
+  saveMessage,
+  getSessionMessages,
+  getAllMessages,
+  clearMessages,
+};
+```
+
+Diese Funktionen werden vom Server (server.js) verwendet um Sessions und Nachrichten zu verwalten.
+
+## Datenbankstruktur-Beispiel
+
+```
+sessions:
+┌─────────────────────────┬────────────┬───────────────────────┬───────────────────────┐
+│ id                      │ title      │ created_at            │ updated_at            │
+├─────────────────────────┼────────────┼───────────────────────┼───────────────────────┤
+│ session_1702..._abc123  │ New Chat   │ 2024-12-19 10:00:00  │ 2024-12-19 10:05:23  │
+│ session_1702..._xyz789  │ Code Help  │ 2024-12-19 09:30:00  │ 2024-12-19 09:45:00  │
+└─────────────────────────┴────────────┴───────────────────────┴───────────────────────┘
+
+messages:
+┌────┬─────────────────────────┬───────────┬──────────────┬───────────────────────┐
+│ id │ session_id              │ role      │ content      │ timestamp             │
+├────┼─────────────────────────┼───────────┼──────────────┼───────────────────────┤
+│ 1  │ session_1702..._abc123  │ user      │ Hello        │ 2024-12-19 10:00:15  │
+│ 2  │ session_1702..._abc123  │ assistant │ Hi there!    │ 2024-12-19 10:00:18  │
+│ 3  │ session_1702..._xyz789  │ user      │ Help me code │ 2024-12-19 09:30:30  │
+└────┴─────────────────────────┴───────────┴──────────────┴───────────────────────┘
+```
 
 - `role`: Spaltenname
 - `TEXT`: Datentyp (String/Text)

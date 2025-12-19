@@ -29,17 +29,18 @@ build-a-custom-chatgpt-web-app/
 
 ✅ **Full-stack chat application**
 
-- React frontend with modern UI
+- React frontend with modern UI and session sidebar
 - Express backend with REST API
-- OpenAI ChatGPT integration
-- SQLite database for message persistence
+- OpenAI ChatGPT integration with streaming responses
+- SQLite database for message and session persistence
 
 ✅ **Core functionality**
 
-- Send messages to ChatGPT
-- Receive and display AI responses
+- Send messages to ChatGPT with word-by-word streaming
+- Multiple chat sessions support
+- Create, switch, and delete sessions
 - Conversation history loaded on page refresh
-- Real-time message updates
+- Real-time message updates with typing effect
 - Loading states and error handling
 
 ## Prerequisites
@@ -115,8 +116,11 @@ You should see:
 ```
 Server is running on http://localhost:3000
 API endpoints available:
-  POST http://localhost:3000/api/chat
-  GET  http://localhost:3000/api/messages
+  POST   http://localhost:3000/api/chat
+  GET    http://localhost:3000/api/messages
+  POST   http://localhost:3000/api/sessions
+  GET    http://localhost:3000/api/sessions
+  DELETE http://localhost:3000/api/sessions/:sessionId
 ```
 
 ### Terminal 2: Start the Frontend Development Server
@@ -144,28 +148,38 @@ Open your browser and navigate to: `http://localhost:5173`
 
 ### POST /api/chat
 
-Send a message to ChatGPT and receive a response.
+Send a message to ChatGPT and receive a streaming response (Server-Sent Events).
 
 **Request:**
 
 ```json
 {
-  "message": "Hello, how are you?"
+  "message": "Hello, how are you?",
+  "sessionId": "session_1234567890_abc123"
 }
 ```
 
-**Response:**
+**Response (Streaming):**
 
-```json
-{
-  "message": "I'm doing well, thank you for asking!",
-  "timestamp": "2024-12-19T12:00:00.000Z"
-}
+```
+data: {"content":"I"}
+
+data: {"content":"'m"}
+
+data: {"content":" doing"}
+
+data: {"content":" well"}
+
+data: {"done":true,"timestamp":"2024-12-19T12:00:00.000Z"}
 ```
 
 ### GET /api/messages
 
-Retrieve the entire conversation history.
+Retrieve conversation history for a specific session or all messages.
+
+**Query Parameters:**
+
+- `sessionId` (optional): Filter messages by session ID
 
 **Response:**
 
@@ -174,18 +188,74 @@ Retrieve the entire conversation history.
   "messages": [
     {
       "id": 1,
+      "session_id": "session_1234567890_abc123",
       "role": "user",
       "content": "Hello, how are you?",
       "timestamp": "2024-12-19T12:00:00.000Z"
     },
     {
       "id": 2,
+      "session_id": "session_1234567890_abc123",
       "role": "assistant",
       "content": "I'm doing well, thank you for asking!",
       "timestamp": "2024-12-19T12:00:05.000Z"
     }
   ],
   "count": 2
+}
+```
+
+### POST /api/sessions
+
+Create a new chat session.
+
+**Request:**
+
+```json
+{
+  "title": "New Chat"
+}
+```
+
+**Response:**
+
+```json
+{
+  "id": "session_1234567890_abc123",
+  "title": "New Chat",
+  "created_at": "2024-12-19T12:00:00.000Z"
+}
+```
+
+### GET /api/sessions
+
+Get all chat sessions.
+
+**Response:**
+
+```json
+{
+  "sessions": [
+    {
+      "id": "session_1234567890_abc123",
+      "title": "New Chat",
+      "created_at": "2024-12-19T12:00:00.000Z",
+      "updated_at": "2024-12-19T12:05:00.000Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+### DELETE /api/sessions/:sessionId
+
+Delete a chat session and all its messages.
+
+**Response:**
+
+```json
+{
+  "success": true
 }
 ```
 
@@ -204,33 +274,72 @@ Health check endpoint.
 
 ## How It Works
 
-1. **User sends a message**: The React frontend captures the user's input and sends it to the backend via POST `/api/chat`
+1. **User sends a message**: The React frontend captures the user's input and sends it to the backend via POST `/api/chat` with streaming enabled
 
 2. **Backend processes the request**:
 
+   - Verifies the session exists
    - Saves the user message to the SQLite database
-   - Retrieves the full conversation history
-   - Sends all messages to the OpenAI ChatGPT API
-   - Receives the AI response
-   - Saves the assistant's response to the database
-   - Returns the response to the frontend
+   - Retrieves the conversation history for the session
+   - Sends all messages to the OpenAI ChatGPT API with streaming enabled
+   - Streams the AI response word-by-word using Server-Sent Events (SSE)
+   - Saves the complete assistant's response to the database
+   - Updates the session timestamp
 
-3. **Frontend displays the response**: The React app updates the UI with both the user message and the AI response
+3. **Frontend displays the response**: The React app displays the streaming response in real-time with a typing effect
 
-4. **Conversation persistence**: On page reload, the frontend fetches all messages from the database via GET `/api/messages` and displays them
+4. **Session management**: Users can create multiple chat sessions, switch between them, and delete old ones
+
+5. **Conversation persistence**: On page reload, the frontend fetches all sessions and loads the messages for the active session
 
 ## Database Schema
 
-The SQLite database has a single `messages` table:
+The SQLite database has two tables:
+
+### Sessions Table
+
+```sql
+CREATE TABLE sessions (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Messages Table
 
 ```sql
 CREATE TABLE messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  role TEXT NOT NULL,           -- 'user' or 'assistant'
-  content TEXT NOT NULL,         -- Message content
-  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+  session_id TEXT NOT NULL,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 ```
+
+role TEXT NOT NULL, -- 'user' or 'assistant'
+content TEXT NOT NULL, -- Message content
+timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+```
+
+## Key Features Implemented
+
+### 1. Streaming Responses ✅
+
+Messages from ChatGPT appear word-by-word in real-time using Server-Sent Events (SSE). This creates a natural typing effect that enhances the user experience.
+
+### 2. Multiple Chat Sessions ✅
+
+Users can create and manage multiple independent chat sessions:
+- Click "+ New Chat" to start a new conversation
+- Click on any session in the sidebar to switch to it
+- Delete sessions using the 🗑️ button
+- Sessions are automatically updated with the latest message timestamp
 
 ## Troubleshooting
 
@@ -256,20 +365,21 @@ CREATE TABLE messages (
 
 - The database file `chat.db` is created automatically
 - To reset the database, delete `chat.db` and restart the backend
+- Use the provided clear-db scripts: `.\clear-db.ps1` (Windows) or `./clear-db.sh` (Mac/Linux)
 
-## Extension Challenges
+## Additional Enhancement Ideas
 
-Want to enhance the app? Try these challenges:
+Want to further enhance the app? Try these:
 
-1. **Streaming responses**: Implement Server-Sent Events (SSE) to stream ChatGPT responses word-by-word for a typing effect
+1. **Message editing**: Allow users to edit previous messages and regenerate responses
 
-2. **Multiple chat sessions**: Add a `session_id` column to support multiple independent conversations
+2. **Export conversations**: Add a button to export the conversation as JSON or text file
 
-3. **Message editing**: Allow users to edit previous messages and regenerate responses
+3. **Session titles**: Auto-generate meaningful session titles from the first message
 
-4. **Export conversations**: Add a button to export the conversation as JSON or text file
+4. **Search**: Search across all sessions
 
-5. **Dark mode**: Add a theme toggle for dark/light mode
+5. **Tags**: Add tags to sessions for categorization
 
 ## Technology Stack
 
@@ -293,3 +403,4 @@ ISC
 ## Author
 
 Built as part of a full-stack development challenge.
+```

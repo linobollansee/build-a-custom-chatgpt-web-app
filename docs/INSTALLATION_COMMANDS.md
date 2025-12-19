@@ -113,8 +113,11 @@ npm run dev
 [nodemon] starting `node server.js`
 Server is running on http://localhost:3000
 API endpoints available:
-  POST http://localhost:3000/api/chat
-  GET  http://localhost:3000/api/messages
+  POST   http://localhost:3000/api/chat
+  GET    http://localhost:3000/api/messages
+  POST   http://localhost:3000/api/sessions
+  GET    http://localhost:3000/api/sessions
+  DELETE http://localhost:3000/api/sessions/:sessionId
 ```
 
 ### Terminal 2 - Start Frontend Server
@@ -172,34 +175,48 @@ Expected response:
 { "status": "OK", "timestamp": "2024-12-19T12:00:00.000Z" }
 ```
 
-2. **Get Messages:**
+2. **Get Sessions:**
 
 ```bash
-curl http://localhost:3000/api/messages
+curl http://localhost:3000/api/sessions
 ```
 
-Expected response (if no messages yet):
+Expected response (if no sessions yet):
 
 ```json
-{ "messages": [], "count": 0 }
+{ "sessions": [], "count": 0 }
 ```
 
-3. **Send a Test Message:**
+3. **Create a Test Session:**
 
 ```bash
-curl -X POST http://localhost:3000/api/chat \
+curl -X POST http://localhost:3000/api/sessions \
   -H "Content-Type: application/json" \
-  -d '{"message":"Hello, ChatGPT!"}'
+  -d '{"title":"Test Chat"}'
 ```
 
 Expected response:
 
 ```json
 {
-  "message": "Hello! How can I assist you today?",
-  "timestamp": "2024-12-19T12:00:00.000Z"
+  "id": "session_1234567890_abc123",
+  "title": "Test Chat",
+  "created_at": "2024-12-19T12:00:00.000Z"
 }
 ```
+
+4. **Send a Test Message (requires sessionId):**
+
+```bash
+# Replace SESSION_ID with actual session ID from previous command
+curl -X POST http://localhost:3000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Hello, ChatGPT!", "sessionId":"SESSION_ID"}'
+```
+
+This will return a streaming response with Server-Sent Events.
+
+````
 
 ## Common Issues and Solutions
 
@@ -210,7 +227,7 @@ Expected response:
 ```bash
 cd backend
 npm install
-```
+````
 
 ### Issue: "Cannot find module 'react'"
 

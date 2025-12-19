@@ -1,107 +1,243 @@
 # Code-Erklärungen: server.js
 
-Diese Datei enthält eine detaillierte Erklärung jeder Zeile des Backend-Servers (`backend/server.js`).
+Diese Datei enthält eine detaillierte Erklärung des Backend-Servers (`backend/server.js`).
 
-## Zeile 1: Environment-Variablen laden
+**Hinweis:** Der Server implementiert **Streaming-Antworten** (SSE) und **Session-Management**.
+
+## Initialisierung
+
+### Dependencies laden
 
 ```javascript
 require("dotenv").config();
-```
-
-**Erklärung:** Lädt die `dotenv`-Bibliothek und führt die `config()`-Funktion aus. Dies liest die `.env`-Datei und lädt alle dort definierten Umgebungsvariablen (wie den OpenAI API-Schlüssel) in `process.env`.
-
----
-
-## Zeile 2: Express importieren
-
-```javascript
 const express = require("express");
-```
-
-**Erklärung:** Importiert das Express-Framework. Express ist ein minimalistisches Web-Framework für Node.js, das die Erstellung von Webservern und APIs vereinfacht.
-
----
-
-## Zeile 3: CORS importieren
-
-```javascript
 const cors = require("cors");
-```
-
-**Erklärung:** Importiert die CORS-Middleware (Cross-Origin Resource Sharing). CORS ermöglicht es dem Frontend (auf Port 5173), mit dem Backend (auf Port 3000) zu kommunizieren, obwohl sie auf unterschiedlichen Ports laufen.
-
----
-
-## Zeile 4: OpenAI-Bibliothek importieren
-
-```javascript
 const OpenAI = require("openai");
 ```
 
-**Erklärung:** Importiert die offizielle OpenAI-JavaScript-Bibliothek. Diese ermöglicht die Kommunikation mit der ChatGPT API.
+**Erklärung:**
 
----
+- `dotenv`: Lädt Environment-Variablen aus `.env`-Datei
+- `express`: Web-Framework für Node.js
+- `cors`: Ermöglicht Cross-Origin-Anfragen vom Frontend
+- `OpenAI`: Offizielle OpenAI API-Bibliothek mit Streaming-Support
 
-## Zeile 5: Datenbankfunktionen importieren
+### Datenbankfunktionen importieren
 
 ```javascript
-const { saveMessage, getAllMessages } = require("./database");
+const {
+  createSession,
+  getAllSessions,
+  getSession,
+  deleteSession,
+  saveMessage,
+  getSessionMessages,
+  getAllMessages,
+} = require("./database");
 ```
 
-**Erklärung:** Importiert zwei Funktionen aus der `database.js`-Datei:
+**Erklärung:** Importiert alle Session- und Nachrichten-Funktionen aus database.js
 
-- `saveMessage`: Speichert eine Nachricht in der SQLite-Datenbank
-- `getAllMessages`: Ruft alle Nachrichten aus der Datenbank ab
-
----
-
-## Zeile 7: Express-App erstellen
+### Server-Konfiguration
 
 ```javascript
 const app = express();
-```
-
-**Erklärung:** Erstellt eine neue Express-Anwendungsinstanz. Diese `app`-Variable repräsentiert den gesamten Server und wird verwendet, um Routen, Middleware und Einstellungen zu definieren.
-
----
-
-## Zeile 8: Port-Konfiguration
-
-```javascript
 const PORT = process.env.PORT || 3000;
-```
 
-**Erklärung:** Definiert den Port, auf dem der Server läuft. Versucht zuerst, den Port aus der Umgebungsvariable `process.env.PORT` zu lesen. Falls diese nicht existiert, wird der Standardport 3000 verwendet.
-
----
-
-## Zeile 10-12: Middleware konfigurieren
-
-### Zeile 11: CORS aktivieren
-
-```javascript
 app.use(cors());
-```
-
-**Erklärung:** Aktiviert CORS für alle Routen. Dies erlaubt Anfragen von jeder Origin (Frontend-Domain). In Produktion sollte dies auf spezifische Domains beschränkt werden.
-
-### Zeile 12: JSON-Parser aktivieren
-
-```javascript
 app.use(express.json());
 ```
 
-**Erklärung:** Aktiviert die eingebaute JSON-Middleware von Express. Diese parst eingehende Anfragen mit JSON-Payload und macht die Daten über `req.body` verfügbar.
+**Erklärung:**
 
----
+- Erstellt Express-App
+- Port aus Environment-Variable oder Standard 3000
+- CORS aktivieren für Frontend-Kommunikation
+- JSON-Parser aktivieren
 
-## Zeile 14-17: OpenAI-Client initialisieren
+### OpenAI-Client
 
 ```javascript
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 ```
+
+**Erklärung:** Initialisiert OpenAI-Client mit API-Key aus .env-Datei
+
+## API-Endpoints
+
+### POST /api/chat (Streaming)
+
+**Funktion:** Sendet Nachricht an ChatGPT und streamt die Antwort in Echtzeit
+
+**Request Body:**
+
+```json
+{
+  "message": "Hello",
+  "sessionId": "session_1234567890_abc123"
+}
+```
+
+**Ablauf:**
+
+1. Validiert message und sessionId
+2. Prüft ob Session existiert
+3. Speichert User-Nachricht in Datenbank
+4. Lädt Gesprächsverlauf für Session
+5. Ruft OpenAI Streaming API auf
+6. Sendet Chunks via Server-Sent Events (SSE)
+7. Speichert vollständige Assistant-Antwort
+8. Aktualisiert Session-Timestamp
+
+**Response (SSE):**
+
+```
+data: {"content":"Hello"}
+data: {"content":" there"}
+data: {"done":true,"timestamp":"2024-12-19T12:00:00.000Z"}
+```
+
+**Headers:**
+
+- `Content-Type: text/event-stream` - SSE-Format
+- `Cache-Control: no-cache` - Kein Caching
+- `Connection: keep-alive` - Verbindung offen halten
+
+### GET /api/messages
+
+**Funktion:** Lädt Nachrichten für eine Session oder alle Nachrichten
+
+**Query Parameter:**
+
+- `sessionId` (optional): Filter nach Session-ID
+
+**Response:**
+
+```json
+{
+  "messages": [...],
+  "count": 42
+}
+```
+
+### POST /api/sessions
+
+**Funktion:** Erstellt neue Chat-Sitzung
+
+**Request Body:**
+
+```json
+{
+  "title": "New Chat"
+}
+```
+
+**Response:**
+
+```json
+{
+  "id": "session_1234567890_abc123",
+  "title": "New Chat",
+  "created_at": "2024-12-19T12:00:00.000Z"
+}
+```
+
+### GET /api/sessions
+
+**Funktion:** Listet alle Chat-Sitzungen
+
+**Response:**
+
+```json
+{
+  "sessions": [...],
+  "count": 5
+}
+```
+
+Sessions sind sortiert nach `updated_at` (neueste zuerst).
+
+### DELETE /api/sessions/:sessionId
+
+**Funktion:** Löscht Session und alle zugehörigen Nachrichten (CASCADE)
+
+**Response:**
+
+```json
+{
+  "success": true
+}
+```
+
+### GET /api/health
+
+**Funktion:** Health-Check für Server-Status
+
+**Response:**
+
+```json
+{
+  "status": "OK",
+  "timestamp": "2024-12-19T12:00:00.000Z"
+}
+```
+
+## Streaming-Implementierung
+
+Der Server verwendet OpenAI's Streaming-API:
+
+```javascript
+const stream = await openai.chat.completions.create({
+  model: "gpt-3.5-turbo",
+  messages: messages,
+  stream: true,
+});
+```
+
+Jedes Chunk wird sofort an den Client gesendet:
+
+```javascript
+for await (const chunk of stream) {
+  const content = chunk.choices[0]?.delta?.content || "";
+  if (content) {
+    fullResponse += content;
+    res.write(`data: ${JSON.stringify({ content })}\n\n`);
+  }
+}
+```
+
+Dies ermöglicht den Typing-Effekt im Frontend.
+
+## Error Handling
+
+Alle Endpoints haben try-catch-Blöcke:
+
+- Loggen Fehler zur Konsole
+- Senden benutzerfreundliche Fehlermeldungen
+- Geben HTTP-Statuscodes zurück (400, 404, 500)
+
+## Server starten
+
+```javascript
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`API endpoints available:`);
+  console.log(`  POST   http://localhost:${PORT}/api/chat`);
+  console.log(`  GET    http://localhost:${PORT}/api/messages`);
+  console.log(`  POST   http://localhost:${PORT}/api/sessions`);
+  console.log(`  GET    http://localhost:${PORT}/api/sessions`);
+  console.log(`  DELETE http://localhost:${PORT}/api/sessions/:sessionId`);
+});
+```
+
+Startet den Server und zeigt alle verfügbaren Endpoints an.
+const openai = new OpenAI({
+apiKey: process.env.OPENAI_API_KEY,
+});
+
+````
 
 **Erklärung:** Erstellt eine neue Instanz des OpenAI-Clients. Der API-Schlüssel wird aus der Umgebungsvariable `OPENAI_API_KEY` gelesen (die aus der `.env`-Datei stammt). Dieser Client wird für alle API-Aufrufe an ChatGPT verwendet.
 
@@ -113,7 +249,7 @@ const openai = new OpenAI({
 
 ```javascript
 app.post("/api/chat", async (req, res) => {
-```
+````
 
 **Erklärung:** Definiert eine POST-Route unter `/api/chat`. Die Callback-Funktion ist `async`, da sie auf die OpenAI API warten muss. Parameter:
 

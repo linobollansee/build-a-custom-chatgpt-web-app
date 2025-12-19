@@ -63,8 +63,11 @@ Expected output:
 ```
 Server is running on http://localhost:3000
 API endpoints available:
-  POST http://localhost:3000/api/chat
-  GET  http://localhost:3000/api/messages
+  POST   http://localhost:3000/api/chat
+  GET    http://localhost:3000/api/messages
+  POST   http://localhost:3000/api/sessions
+  GET    http://localhost:3000/api/sessions
+  DELETE http://localhost:3000/api/sessions/:sessionId
 ```
 
 **Terminal 2 - Frontend:**
@@ -131,20 +134,25 @@ Navigate to: http://localhost:5173
 ## What's Implemented
 
 ✅ Express backend with REST API
-✅ ChatGPT API integration
-✅ SQLite database for message persistence
+✅ ChatGPT API integration with streaming (SSE)
+✅ SQLite database with sessions and messages tables
 ✅ React frontend with modern UI
-✅ Real-time chat interface
-✅ Conversation history on page load
+✅ Real-time streaming chat interface with typing effect
+✅ Multiple session management with sidebar
+✅ Session creation, switching, and deletion
+✅ Conversation history persistence by session
 ✅ Error handling and loading states
 ✅ CORS configuration
 ✅ Auto-scroll to new messages
-✅ Responsive design
+✅ Responsive design with animations
 
-## Next Steps (Optional Enhancements)
+## Additional Enhancement Ideas
 
-1. **Streaming responses** - Add Server-Sent Events for word-by-word display
-2. **Multiple sessions** - Add session_id for separate conversations
-3. **Authentication** - Add user login system
-4. **Message editing** - Allow editing and regenerating responses
-5. **Export functionality** - Download conversation as JSON/text
+Want to further enhance the app? Try these:
+
+1. **Message editing** - Allow editing and regenerating responses
+2. **Export functionality** - Download conversation as JSON/text
+3. **Session titles** - Auto-generate titles from first message
+4. **Authentication** - Add user login system
+5. **Search** - Search across all sessions
+6. **Tags** - Add tags to sessions for organization

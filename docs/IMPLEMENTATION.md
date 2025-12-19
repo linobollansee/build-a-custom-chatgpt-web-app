@@ -2,7 +2,7 @@
 
 ## ✅ Challenge Completed!
 
-All requirements from challenge.md have been successfully implemented.
+All requirements from challenge.md have been successfully implemented, **including both extension challenges**.
 
 ## What Was Built
 
@@ -16,20 +16,25 @@ All requirements from challenge.md have been successfully implemented.
 
 2. **API Endpoints**
 
-   - `POST /api/chat` - Accepts user message, calls ChatGPT API, saves conversation, returns response
-   - `GET /api/messages` - Fetches full conversation history from database
+   - `POST /api/chat` - Accepts user message, calls ChatGPT API with streaming (SSE), saves conversation, returns streaming response
+   - `GET /api/messages?sessionId=<id>` - Fetches conversation history for specific session
+   - `POST /api/sessions` - Creates new chat session
+   - `GET /api/sessions` - Lists all chat sessions
+   - `DELETE /api/sessions/:sessionId` - Deletes session and messages
    - `GET /api/health` - Health check endpoint
 
 3. **Database**
 
-   - SQLite database with `messages` table
-   - Schema: id, role, content, timestamp
-   - Functions: saveMessage(), getAllMessages(), clearMessages()
+   - SQLite database with `sessions` and `messages` tables
+   - Sessions schema: id, title, created_at, updated_at
+   - Messages schema: id, session_id, role, content, timestamp
+   - Functions: createSession(), getAllSessions(), getSession(), deleteSession(), saveMessage(), getSessionMessages(), updateSessionTimestamp()
 
 4. **Configuration**
    - CORS enabled for frontend connection
    - JSON request parsing
    - Environment variables for API key
+   - Server-Sent Events for streaming responses
 
 ### Part 2: Frontend (React) ✅
 
@@ -40,25 +45,32 @@ All requirements from challenge.md have been successfully implemented.
 
 2. **Chat Interface**
 
+   - Session sidebar with chat list
+   - "+ New Chat" button for creating sessions
    - Message list displaying user and assistant messages
    - Input field for typing messages
    - Send button to submit messages
-   - Loading indicator while waiting for response
+   - Loading indicator with streaming animation
    - Error handling and display
+   - Delete session button (🗑️)
 
 3. **Features**
-   - Real-time message display
+   - Real-time streaming display with typing effect
+   - Multiple independent chat sessions
+   - Session switching
+   - Session deletion
    - Auto-scroll to latest message
-   - Conversation history loaded on page refresh
+   - Conversation history loaded by session on page refresh
    - Immediate UI update when user sends message
-   - Responsive and modern design
+   - Responsive design with dark sidebar theme
+   - Auto-creates first session on app load
 
-### Part 3: Extension Challenges 🎯
+### Part 3: Extension Challenges ✅
 
-Ready to implement:
+**Both extension challenges fully implemented:**
 
-- Streaming responses (Server-Sent Events)
-- Multiple chat sessions with session_id
+✅ **Streaming responses** - Server-Sent Events (SSE) for word-by-word display
+✅ **Multiple chat sessions** - Full session management with database support
 
 ## Installation Commands Used
 
