@@ -27,7 +27,24 @@ const openai = new OpenAI({
 // Endpoint to handle chat messages with streaming
 app.post("/api/chat", async (req, res) => {
   try {
-    const { message, sessionId } = req.body;
+    const {
+      message,
+      sessionId,
+      model,
+      temperature,
+      maxTokens,
+      topP,
+      frequencyPenalty,
+      presencePenalty,
+      systemPrompt,
+      stop,
+      n,
+      logitBias,
+      user,
+      seed,
+      topLogprobs,
+      logprobs,
+    } = req.body;
 
     if (!message) {
       return res.status(400).json({ error: "Message is required" });
@@ -36,6 +53,13 @@ app.post("/api/chat", async (req, res) => {
     if (!sessionId) {
       return res.status(400).json({ error: "Session ID is required" });
     }
+
+    // Use provided model or default to gpt-3.5-turbo
+    const selectedModel = model || "gpt-3.5-turbo";
+
+    console.log(
+      `[Chat API] Using model: ${selectedModel} for session: ${sessionId}`
+    );
 
     // Verify session exists
     const session = getSession(sessionId);
@@ -55,17 +79,49 @@ app.post("/api/chat", async (req, res) => {
       content: msg.content,
     }));
 
+    // Prepend system message if provided
+    if (systemPrompt && systemPrompt.trim()) {
+      messages.unshift({
+        role: "system",
+        content: systemPrompt,
+      });
+    }
+
     // Set headers for Server-Sent Events
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
-    // Call ChatGPT API with streaming
-    const stream = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+    // Build API parameters
+    const apiParams = {
+      model: selectedModel,
       messages: messages,
       stream: true,
-    });
+    };
+
+    // Add optional parameters if provided
+    if (temperature !== undefined && temperature !== null)
+      apiParams.temperature = parseFloat(temperature);
+    if (maxTokens !== undefined && maxTokens !== null)
+      apiParams.max_tokens = parseInt(maxTokens);
+    if (topP !== undefined && topP !== null) apiParams.top_p = parseFloat(topP);
+    if (frequencyPenalty !== undefined && frequencyPenalty !== null)
+      apiParams.frequency_penalty = parseFloat(frequencyPenalty);
+    if (presencePenalty !== undefined && presencePenalty !== null)
+      apiParams.presence_penalty = parseFloat(presencePenalty);
+    if (stop && stop.length > 0) apiParams.stop = stop;
+    if (n !== undefined && n !== null) apiParams.n = parseInt(n);
+    if (logitBias && Object.keys(logitBias).length > 0)
+      apiParams.logit_bias = logitBias;
+    if (user) apiParams.user = user;
+    if (seed !== undefined && seed !== null) apiParams.seed = parseInt(seed);
+    if (logprobs !== undefined && logprobs !== null)
+      apiParams.logprobs = logprobs;
+    if (topLogprobs !== undefined && topLogprobs !== null)
+      apiParams.top_logprobs = parseInt(topLogprobs);
+
+    // Call ChatGPT API with streaming
+    const stream = await openai.chat.completions.create(apiParams);
 
     let fullResponse = "";
 
